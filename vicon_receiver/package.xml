@@ -2,22 +2,18 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>vicon_receiver</name>
-  <version>0.1.1</version>
-  <description>ROS2 package to retrieve data from a Vicon system</description>
+  <version>0.2.0</version>
+  <description>ROS 2 package to retrieve data from a Vicon system. Jazzy port of the OPT4SMART
+  receiver: publishes geometry_msgs/PoseStamped per subject/segment, in metres, in the Vicon
+  global frame. The rosidl declarations are gone with msg/Position.msg - the package generates
+  no interfaces and never did.</description>
   <maintainer email="info@opt4smart.eu">OPT4SMART group</maintainer>
   <license>GNU General Public License v3</license>
-  
-  <member_of_group>rosidl_interface_packages</member_of_group>
-
-  <buildtool_depend>rosidl_default_generators</buildtool_depend>
-
-  <exec_depend>rosidl_default_runtime</exec_depend>
-
-  <build_depend>rclcpp</build_depend>
-  <depend>geometry_msgs</depend>
-  <exec_depend>rclcpp</exec_depend>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>geometry_msgs</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

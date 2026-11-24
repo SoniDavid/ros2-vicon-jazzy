@@ -6,11 +6,19 @@ Communicator::Communicator() : Node("vicon")
 {
     // get parameters
     this->declare_parameter<std::string>("hostname", "127.0.0.1");
+    // The DataStream port. Previously implicit at the SDK's 801 and only reachable by writing
+    // "host:801" into hostname.
+    this->declare_parameter<int>("port", 801);
     this->declare_parameter<int>("buffer_size", 200);
     this->declare_parameter<std::string>("namespace", "vicon");
     this->get_parameter("hostname", hostname);
+    this->get_parameter("port", port);
     this->get_parameter("buffer_size", buffer_size);
     this->get_parameter("namespace", ns_name);
+
+    // The SDK takes host and port as one string.
+    if (hostname.find(':') == std::string::npos)
+        hostname = hostname + ":" + std::to_string(port);
 }
 
 bool Communicator::connect()
@@ -33,13 +41,10 @@ bool Communicator::connect()
     msg = "Connection successfully established with " + hostname;
     cout << msg << endl;
 
-    // perform further initialization
+    // Segment data only. The other five streams were enabled and never read; here the link
+    // carries a flight control aiding source and must not stall - EKF2 drops external vision
+    // 400 ms after the last sample it receives.
     vicon_client.EnableSegmentData();
-    vicon_client.EnableMarkerData();
-    vicon_client.EnableUnlabeledMarkerData();
-    vicon_client.EnableMarkerRayData();
-    vicon_client.EnableDeviceData();
-    vicon_client.EnableDebugData();
 
     vicon_client.SetStreamMode(StreamMode::ClientPull);
     vicon_client.SetBufferSize(buffer_size);
@@ -98,7 +103,11 @@ void Communicator::get_frame()
                 vicon_client.GetSegmentGlobalTranslation(subject_name, segment_name);
             Output_GetSegmentGlobalRotationQuaternion rot =
                 vicon_client.GetSegmentGlobalRotationQuaternion(subject_name, segment_name);
-            
+            // Occluded is [0,0,0] and (x,y,z,w) [1,0,0,0]: a valid 180 deg roll at the origin. Publish
+            // nothing; vicon_px4_bridge stops on the stale pose and EKF2 drops EV 0.4 s later.
+            if (trans.Occluded || rot.Occluded)
+                continue;
+
             for (size_t i = 0; i < 4; i++)
             {
                 if (i < 3)
@@ -112,7 +121,7 @@ void Communicator::get_frame()
             current_position.stamp = this->now();
 
             // send position to publisher
-            boost::mutex::scoped_try_lock lock(mutex);
+            std::unique_lock<std::mutex> lock(mutex, std::try_to_lock);
 
             if (lock.owns_lock())
             {
@@ -140,7 +149,8 @@ void Communicator::get_frame()
 
 void Communicator::create_publisher(const string subject_name, const string segment_name)
 {
-    boost::thread(&Communicator::create_publisher_thread, this, subject_name, segment_name);
+    // Detached, as the boost::thread temporary was: the publisher outlives the call.
+    std::thread(&Communicator::create_publisher_thread, this, subject_name, segment_name).detach();
 }
 
 void Communicator::create_publisher_thread(const string subject_name, const string segment_name)
@@ -152,7 +162,7 @@ void Communicator::create_publisher_thread(const string subject_name, const stri
     cout << msg << endl;
 
     // create publisher
-    boost::mutex::scoped_lock lock(mutex);
+    std::unique_lock<std::mutex> lock(mutex);
     pub_map.insert(std::map<std::string, Publisher>::value_type(key, Publisher(topic_name, this)));
 
     // we don't need the lock anymore, since rest is protected by is_ready

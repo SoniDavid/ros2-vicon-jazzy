@@ -9,7 +9,11 @@
 #include <chrono>
 #include <string>
 #include <unistd.h>
-#include <boost/thread.hpp>
+// std, not boost. The Vicon SDK is built against Boost 1.58 and carries its own stubs; linking
+// this node against system Boost too puts 1.83's header-only boost::system symbols in the
+// executable, where they preempt the SDK's and segfault it inside Connect().
+#include <mutex>
+#include <thread>
 
 using namespace std;
 
@@ -19,10 +23,11 @@ class Communicator : public rclcpp::Node
 private:
     ViconDataStreamSDK::CPP::Client vicon_client;
     string hostname;
+    int port;
     unsigned int buffer_size;
     string ns_name;
     map<string, Publisher> pub_map;
-    boost::mutex mutex;
+    std::mutex mutex;
 
 public:
     Communicator();
